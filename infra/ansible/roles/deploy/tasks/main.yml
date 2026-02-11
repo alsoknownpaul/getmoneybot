@@ -1,0 +1,129 @@
+# Deploy role: Create deploy user and prepare application directory
+---
+- name: Create deploy user
+  ansible.builtin.user:
+    name: "{{ app_user }}"
+    shell: /bin/bash
+    create_home: yes
+    groups:
+      - docker
+      - sudo
+    append: yes
+
+- name: Add SSH key for deploy user
+  ansible.posix.authorized_key:
+    user: "{{ app_user }}"
+    key: "{{ lookup('file', '~/.ssh/getmoney.pub') }}"
+    state: present
+
+- name: Create application directory
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0755"
+
+- name: Install Git
+  ansible.builtin.apt:
+    name: git
+    state: present
+
+# Setup GitHub Deploy Key for private repository access
+- name: Create .ssh directory for deploy user
+  ansible.builtin.file:
+    path: "/home/{{ app_user }}/.ssh"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0700"
+
+- name: Copy GitHub deploy key
+  ansible.builtin.copy:
+    src: "{{ deploy_key_path | default('~/.ssh/getmoney_deploy_key') }}"
+    dest: "/home/{{ app_user }}/.ssh/getmoney_deploy_key"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0600"
+  when: deploy_key_path is defined or lookup('file', '~/.ssh/getmoney_deploy_key', errors='ignore')
+
+- name: Add GitHub to known_hosts
+  ansible.builtin.known_hosts:
+    name: github.com
+    key: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+    path: "/home/{{ app_user }}/.ssh/known_hosts"
+    state: present
+
+- name: Set correct ownership for known_hosts
+  ansible.builtin.file:
+    path: "/home/{{ app_user }}/.ssh/known_hosts"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0644"
+
+- name: Configure SSH to use deploy key for GitHub
+  ansible.builtin.copy:
+    dest: "/home/{{ app_user }}/.ssh/config"
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0600"
+    content: |
+      Host github.com
+        HostName github.com
+        User git
+        IdentityFile ~/.ssh/getmoney_deploy_key
+        IdentitiesOnly yes
+
+# Clone or update repository (if repo_url is set)
+- name: Check if repo already cloned
+  ansible.builtin.stat:
+    path: "{{ app_dir }}/.git"
+  register: git_repo
+
+- name: Clone application repository
+  ansible.builtin.git:
+    repo: "{{ repo_url }}"
+    dest: "{{ app_dir }}"
+    version: main
+    force: no
+    accept_hostkey: yes
+    key_file: "/home/{{ app_user }}/.ssh/getmoney_deploy_key"
+  become_user: "{{ app_user }}"
+  when: 
+    - not git_repo.stat.exists
+    - repo_url is defined
+    - "'YOUR_USER' not in repo_url"
+
+- name: Update application repository (git pull)
+  ansible.builtin.git:
+    repo: "{{ repo_url }}"
+    dest: "{{ app_dir }}"
+    version: main
+    update: yes
+    accept_hostkey: yes
+    key_file: "/home/{{ app_user }}/.ssh/getmoney_deploy_key"
+  become_user: "{{ app_user }}"
+  when: 
+    - git_repo.stat.exists
+    - repo_url is defined
+    - "'YOUR_USER' not in repo_url"
+
+- name: Create .env file placeholder
+  ansible.builtin.file:
+    path: "{{ app_dir }}/.env"
+    state: touch
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0600"
+  when: not git_repo.stat.exists
+
+- name: Display post-setup message
+  ansible.builtin.debug:
+    msg: |
+      Server setup complete!
+      
+      Next steps:
+      1. SSH to server: ssh -i ~/.ssh/getmoney {{ app_user }}@{{ ansible_host }}
+      2. Go to app directory: cd {{ app_dir }}
+      3. Copy .env.example to .env and fill in values
+      4. Run: docker compose up -d --build

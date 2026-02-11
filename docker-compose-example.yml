@@ -1,0 +1,56 @@
+services:
+  bot:
+    build: .
+    container_name: getmoney-bot
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://getmoney:${DB_PASSWORD}@db:5432/getmoney
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - getmoney-network
+
+  db:
+    image: postgres:16-alpine
+    container_name: getmoney-db
+    environment:
+      POSTGRES_USER: getmoney
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: getmoney
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U getmoney -d getmoney"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - getmoney-network
+
+  # Database migrations (run once)
+  migrate:
+    build: .
+    container_name: getmoney-migrate
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://getmoney:${DB_PASSWORD}@db:5432/getmoney
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      - getmoney-network
+    profiles:
+      - migrate
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  getmoney-network:
+    driver: bridge

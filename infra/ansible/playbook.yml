@@ -1,0 +1,40 @@
+# Main Ansible playbook for GetMoney Bot server setup
+---
+- name: Configure GetMoney Bot Server
+  hosts: bot
+  become: true
+  vars:
+    app_user: deploy
+    app_dir: /opt/getmoney
+    # SSH URL для приватного репозитория (используйте с Deploy Key)
+    repo_url: "{{ lookup('env', 'REPO_URL') | default('git@github.com:alsoknownpaul/getmoneybot.git', true) }}"
+    # Путь к приватному deploy ключу на локальной машине
+    deploy_key_path: "{{ lookup('env', 'DEPLOY_KEY_PATH') | default('~/.ssh/getmoney_deploy_key', true) }}"
+
+  roles:
+    - role: security
+      tags: [security]
+    - role: docker
+      tags: [docker]
+    - role: deploy
+      tags: [deploy]
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
+    - name: Reload UFW
+      ansible.builtin.ufw:
+        state: reloaded
+
+    - name: Restart fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+
+    - name: Restart Docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted

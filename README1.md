@@ -1,3 +1,0 @@
-# getmoneybot
-# getmoneybot
-# getmoneybot

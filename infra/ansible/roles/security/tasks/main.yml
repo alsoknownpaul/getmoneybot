@@ -1,0 +1,88 @@
+# Security role: UFW firewall + fail2ban
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Install security packages
+  ansible.builtin.apt:
+    name:
+      - ufw
+      - fail2ban
+      - unattended-upgrades
+    state: present
+
+# UFW Firewall Configuration
+- name: Set UFW default deny incoming
+  ansible.builtin.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set UFW default allow outgoing
+  ansible.builtin.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Allow SSH through UFW
+  ansible.builtin.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    comment: "SSH access"
+
+# - name: Allow HTTP through UFW
+#   ansible.builtin.ufw:
+#     rule: allow
+#     port: "80"
+#     proto: tcp
+#     comment: "HTTP for webhook"
+
+- name: Allow HTTPS through UFW
+  ansible.builtin.ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+    comment: "HTTPS for webhook"
+
+- name: Enable UFW
+  ansible.builtin.ufw:
+    state: enabled
+    logging: "on"
+
+# fail2ban Configuration
+- name: Configure fail2ban for SSH
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = 1h
+      findtime = 10m
+      maxretry = 5
+      backend = systemd
+
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 3
+      bantime = 24h
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    enabled: yes
+    state: started
+
+# Auto security updates
+- name: Enable unattended upgrades for security
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+    mode: "0644"

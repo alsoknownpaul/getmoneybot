@@ -1,0 +1,7 @@
+all:
+  hosts:
+    bot:
+      ansible_host: 89.169.148.251
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ~/.ssh/getmoney
+      ansible_python_interpreter: /usr/bin/python3

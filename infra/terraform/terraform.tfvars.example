@@ -1,0 +1,17 @@
+# Copy this file to terraform.tfvars and fill in the values
+
+# Yandex Cloud credentials
+# Get token: yc iam create-token
+yc_token = "your-oauth-or-iam-token"
+
+# Get cloud_id: yc config get cloud-id
+yc_cloud_id = "your-cloud-id"
+
+# Get folder_id: yc config get folder-id
+yc_folder_id = "your-folder-id"
+
+# Zone (optional, default: ru-central1-a)
+# zone = "ru-central1-a"
+
+# Path to SSH public key
+ssh_public_key_path = "~/.ssh/getmoney.pub"
