@@ -230,14 +230,18 @@ async def show_requests(message: Message) -> None:
 
     text = "\n".join(lines)
 
-    # If there are active requests that can be actioned, show first one
-    actionable = [r for r in active if r.status_enum.can_cancel or r.status_enum.can_confirm_receipt]
-    if actionable:
-        first = actionable[0]
-        text += f"\n\n📝 Запрос #{first.id}:\n{first.format_full()}"
-        await message.answer(text, reply_markup=UserKeyboards.request_actions(first))
-    else:
-        await message.answer(text)
+    # Send summary message
+    await message.answer(text)
+
+    # Send each active request with action buttons (like admin view)
+    actionable = [r for r in active if r.status_enum.can_cancel or r.status_enum.can_confirm_receipt or r.status_enum.can_remind]
+    for r in actionable:
+        keyboard = UserKeyboards.request_actions(r)
+        if keyboard:
+            await message.answer(
+                f"📝 Запрос #{r.id}:\n{r.format_full()}",
+                reply_markup=keyboard,
+            )
 
 
 # === Request Actions ===
